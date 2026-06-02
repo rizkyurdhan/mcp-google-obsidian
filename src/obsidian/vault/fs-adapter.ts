@@ -13,8 +13,9 @@ export class FileSystemAdapter implements VaultAdapter {
 
   private resolvePath(notePath: string): string {
     const p = notePath.endsWith(".md") ? notePath : `${notePath}.md`;
-    const resolved = path.join(this.vaultPath, p);
-    if (!resolved.startsWith(this.vaultPath)) {
+    const normalizedVault = path.resolve(this.vaultPath) + path.sep;
+    const resolved = path.resolve(path.join(this.vaultPath, p));
+    if (!resolved.startsWith(normalizedVault)) {
       throw new Error(`Access denied: path ${notePath} escapes vault boundary.`);
     }
     return resolved;
@@ -23,23 +24,7 @@ export class FileSystemAdapter implements VaultAdapter {
   async listNotes(folder?: string, tag?: string, maxResults?: number): Promise<any[]> {
     const results: any[] = [];
     
-    async function scanDir(dir: string) {
-      if (maxResults && results.length >= maxResults) return;
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.name.startsWith(".")) continue;
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await scanDir(fullPath);
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          const relativePath = path.relative(dir, fullPath); // actually relative to vaultPath is better
-          // Need to fix this relative path logic
-          const relToVault = path.relative(dir.startsWith(fullPath) ? dir : dir, fullPath);
-        }
-      }
-    }
-    
-    // Better implementation for scanning
+    // Implementation for scanning
     const scan = async (dir: string) => {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
@@ -135,8 +120,8 @@ export class FileSystemAdapter implements VaultAdapter {
       // Also could check body tags
       
       const hasTags = matchAll 
-        ? tags.every(t => fileTags.includes(t) || content.includes(`#${t}`))
-        : tags.some(t => fileTags.includes(t) || content.includes(`#${t}`));
+        ? tags.every(t => fileTags.includes(t) || new RegExp(`(?:^|\\s)#${t}\\b`).test(content))
+        : tags.some(t => fileTags.includes(t) || new RegExp(`(?:^|\\s)#${t}\\b`).test(content));
 
       if (hasTags) {
         results.push(note.path);
@@ -158,9 +143,9 @@ export class FileSystemAdapter implements VaultAdapter {
         tags[t] = (tags[t] || 0) + 1;
       }
       
-      const bodyTags = content.match(/#[a-zA-Z0-9_-]+/g) || [];
-      for (let t of bodyTags) {
-        t = t.substring(1); // remove #
+      const bodyTagsMatches = content.matchAll(/(?:^|\s)#([a-zA-Z0-9_-]+)/g);
+      for (const match of bodyTagsMatches) {
+        const t = match[1];
         tags[t] = (tags[t] || 0) + 1;
       }
     }

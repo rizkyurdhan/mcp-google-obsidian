@@ -7,6 +7,7 @@ import { registerDriveTools } from "./google/drive/tools.js";
 import { registerCalendarTools } from "./google/calendar/tools.js";
 import { registerDocsTools } from "./google/docs/tools.js";
 import { registerGoogleResources } from "./google/resources.js";
+import { registerAuthTools } from "./google/auth/tools.js";
 
 import { registerNoteTools } from "./obsidian/notes/tools.js";
 import { registerSearchTools } from "./obsidian/search/tools.js";
@@ -32,6 +33,7 @@ export function createServer(): McpServer {
   registerDriveTools(server);
   registerCalendarTools(server);
   registerDocsTools(server);
+  registerAuthTools(server);
 
   registerNoteTools(server);
   registerSearchTools(server);

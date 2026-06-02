@@ -101,6 +101,45 @@ export function registerBridgeTools(server: McpServer) {
   );
 
   server.tool(
+    "bridge_import_from_docs",
+    "Import a Google Doc and save it as an Obsidian note",
+    {
+      documentId: z.string().describe("The ID of the Google Doc"),
+      notePath: z.string().describe("The path where the new Obsidian note should be saved")
+    },
+    async ({ documentId, notePath }) => {
+      try {
+        const docs = await getDocsClient();
+        const docRes = await docs.documents.get({ documentId });
+        
+        let content = "";
+        if (docRes.data.body && docRes.data.body.content) {
+          for (const element of docRes.data.body.content) {
+            if (element.paragraph && element.paragraph.elements) {
+              for (const pe of element.paragraph.elements) {
+                if (pe.textRun && pe.textRun.content) {
+                  content += pe.textRun.content;
+                }
+              }
+            }
+          }
+        }
+        
+        const adapter = await getVaultAdapter();
+        await adapter.createNote(notePath, content);
+        
+        await updateNoteSyncStatus(notePath, documentId, Date.now());
+
+        return {
+          content: [{ type: "text", text: `Imported successfully to Obsidian. Note Path: ${notePath}` }]
+        };
+      } catch (error) {
+        handleError(error, "Failed to import note from Docs");
+      }
+    }
+  );
+
+  server.tool(
     "bridge_get_sync_status",
     "Get the synchronization status of the vault to Google Workspace",
     {},

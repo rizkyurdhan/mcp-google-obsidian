@@ -1,5 +1,8 @@
 import { VaultAdapter } from "./adapter.js";
 import { logger } from "../../utils/logger.js";
+import { Agent } from "undici";
+
+const insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
 export class RestApiAdapter implements VaultAdapter {
   private baseUrl: string;
@@ -20,13 +23,11 @@ export class RestApiAdapter implements VaultAdapter {
       headers["Authorization"] = `Bearer ${this.apiKey}`;
     }
 
-    // Workaround for self-signed certs from the Local REST API plugin
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
     const url = `${this.baseUrl}${endpoint}`;
     logger.debug(`REST API ${options.method || "GET"} ${url}`);
     
-    const response = await fetch(url, { ...options, headers });
+    const fetchOptions: any = { ...options, headers, dispatcher: insecureAgent };
+    const response = await fetch(url, fetchOptions);
     
     if (!response.ok) {
       throw new Error(`Obsidian REST API error: ${response.status} ${response.statusText}`);
@@ -126,10 +127,16 @@ export class RestApiAdapter implements VaultAdapter {
   }
 
   async getStats(): Promise<{ noteCount: number; tagCount: number; sizeBytes?: number }> {
-    throw new Error("getStats not fully implemented for REST API without full scan");
+    const notes = await this.search("");
+    const tags = await this.listTags();
+    return {
+      noteCount: notes.length,
+      tagCount: Object.keys(tags).length
+    };
   }
 
-  async getRecent(limit?: number): Promise<any[]> {
-    throw new Error("getRecent not implemented for REST API without search sort");
+  async getRecent(limit: number = 10): Promise<any[]> {
+    const notes = await this.search("");
+    return notes.slice(0, limit);
   }
 }

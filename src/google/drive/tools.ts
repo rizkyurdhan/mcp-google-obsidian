@@ -261,7 +261,7 @@ export function registerDriveTools(server: McpServer) {
         
         const base64Data = Buffer.from(res.data as ArrayBuffer).toString('base64');
         return {
-          content: [{ type: "text", text: `Exported successfully. Base64 length: ${base64Data.length}` }]
+          content: [{ type: "text", text: base64Data }]
         };
       } catch (error) {
         handleError(error, "Failed to export Drive file");

@@ -2,6 +2,9 @@ import { VaultAdapter } from "./adapter.js";
 import { FileSystemAdapter } from "./fs-adapter.js";
 import { RestApiAdapter } from "./rest-adapter.js";
 import { logger } from "../../utils/logger.js";
+import { Agent } from "undici";
+
+const insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
 let adapterInstance: VaultAdapter | null = null;
 
@@ -18,7 +21,6 @@ export async function getVaultAdapter(): Promise<VaultAdapter> {
 
   // Try REST API first
   try {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
     
@@ -27,8 +29,9 @@ export async function getVaultAdapter(): Promise<VaultAdapter> {
 
     const res = await fetch(`${restUrl}/`, { 
       headers,
-      signal: controller.signal
-    });
+      signal: controller.signal,
+      dispatcher: insecureAgent
+    } as any);
     
     clearTimeout(timeoutId);
     

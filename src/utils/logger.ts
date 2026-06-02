@@ -1,4 +1,3 @@
-import * as fs from "fs";
 
 /**
  * A logger that writes only to stderr.
