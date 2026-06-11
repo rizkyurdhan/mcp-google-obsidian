@@ -4,3 +4,10 @@ dist/
 google-tokens.json
 .mcp-suite-sync.json
 coverage/
+
+# Debug/test output
+*.log
+error*.txt
+output*.txt
+doc_*.pdf
+document.pdf

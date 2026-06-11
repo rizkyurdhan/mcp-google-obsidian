@@ -1,5 +1,8 @@
 import dotenv from "dotenv";
+const originalLog = console.log;
+console.log = () => {};
 dotenv.config();
+console.log = originalLog;
 
 import { createServer } from "./server.js";
 import { startStdioTransport } from "./transport/stdio.js";
