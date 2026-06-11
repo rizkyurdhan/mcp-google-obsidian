@@ -1,4 +1,4 @@
-# MCP-Suite
+# MCP Google Obsidian Bridge
 
 A unified Model Context Protocol (MCP) server that brings together Google Workspace, an Obsidian Vault, and a Bridge for workflows between them (specifically geared toward NotebookLM).
 
