@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 google-tokens.json
+tokens.json
+obsidian-config/
 .mcp-suite-sync.json
 coverage/
 
