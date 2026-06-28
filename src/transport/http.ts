@@ -7,21 +7,110 @@ import { generateAuthUrl, exchangeCode } from "../auth/oauth.js";
 export async function startHttpTransport(server: McpServer, port: number) {
     const app = express();
 
-    // Use a global or map for active transports
-    let transport: SSEServerTransport;
+    // Map of active session ID to transport
+    const transports = new Map<string, SSEServerTransport>();
 
     app.get("/sse", async (req, res) => {
-        transport = new SSEServerTransport("/message", res);
-        await server.connect(transport);
-        logger.info("New SSE connection established.");
+        logger.info("New SSE connection request.");
+
+        try {
+            // Close previous session — McpServer only supports one transport at a time
+            for (const [id, old] of transports) {
+                logger.info(`Closing old transport ${id}`);
+                await old.close().catch((e) => logger.error("Old transport close error:", e));
+                transports.delete(id);
+            }
+            logger.info("Closing server...");
+            await server.close().catch((e) => logger.error("Server close error:", e));
+            logger.info("Server closed.");
+
+            // Intercept res.write to rewrite the SSE endpoint URL to be absolute
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            const originalWrite = res.write.bind(res);
+            res.write = (chunk: any, encoding?: any, callback?: any) => {
+                let modifiedChunk = chunk;
+                if (typeof chunk === 'string' && chunk.includes('event: endpoint\ndata: /message?')) {
+                    modifiedChunk = chunk.replace('data: /message?', `data: ${baseUrl}/message?`);
+                } else if (Buffer.isBuffer(chunk)) {
+                    const str = chunk.toString('utf8');
+                    if (str.includes('event: endpoint\ndata: /message?')) {
+                        modifiedChunk = Buffer.from(str.replace('data: /message?', `data: ${baseUrl}/message?`), 'utf8');
+                    }
+                }
+
+                if (typeof encoding === 'function') {
+                    return originalWrite(modifiedChunk, encoding);
+                } else if (typeof callback === 'function') {
+                    return originalWrite(modifiedChunk, encoding, callback);
+                } else {
+                    return originalWrite(modifiedChunk, encoding);
+                }
+            };
+
+            const transport = new SSEServerTransport("/message", res);
+
+            // Keepalive ping to prevent connection drops on large idle times or payloads
+            const interval = setInterval(() => {
+                try {
+                    res.write(": keepalive\n\n");
+                } catch (err) {
+                    clearInterval(interval);
+                }
+            }, 15000);
+
+            // Set onclose BEFORE server.connect(), so Protocol captures it and calls it properly
+            transport.onclose = () => {
+                logger.info(`SSE connection closed.`);
+                // We'll clean up the map based on the active transport instance
+                for (const [id, t] of transports) {
+                    if (t === transport) {
+                        transports.delete(id);
+                        logger.info(`Removed session ${id} from map`);
+                    }
+                }
+                clearInterval(interval);
+            };
+
+            logger.info("Connecting new transport...");
+            await server.connect(transport);
+            logger.info("Transport connected!");
+
+            // Wait for the transport to initialize and generate a sessionId
+            const sessionId = transport.sessionId;
+            if (sessionId) {
+                transports.set(sessionId, transport);
+                logger.info(`SSE connection established for session: ${sessionId}`);
+            }
+        } catch (err: any) {
+            logger.error("Failed in GET /sse:", err);
+            if (!res.headersSent) {
+                res.status(500).send(err.message);
+            }
+        }
     });
 
     app.post("/message", async (req, res) => {
-        if (!transport) {
-            res.status(400).send("SSE connection not established");
+        const sessionId = req.query.sessionId as string;
+
+        if (!sessionId) {
+            res.status(400).send("sessionId query parameter is required");
             return;
         }
-        await transport.handlePostMessage(req, res);
+
+        const transport = transports.get(sessionId);
+        if (!transport) {
+            res.status(404).send(`No active session found for ID: ${sessionId}`);
+            return;
+        }
+
+        try {
+            await transport.handlePostMessage(req, res);
+        } catch (err: any) {
+            logger.error(`Error handling message for session ${sessionId}:`, err);
+            if (!res.headersSent) {
+                res.status(500).send(err.message);
+            }
+        }
     });
 
     // --- OAuth Routes ---
