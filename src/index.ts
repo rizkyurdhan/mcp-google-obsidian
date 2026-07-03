@@ -11,14 +11,13 @@ import { logger } from "./utils/logger.js";
 
 async function main() {
   try {
-    const server = createServer();
     const transportType = process.env.MCP_TRANSPORT || "stdio";
 
     if (transportType === "stdio") {
-      await startStdioTransport(server);
+      await startStdioTransport(createServer());
     } else if (transportType === "http") {
       const port = parseInt(process.env.MCP_HTTP_PORT || "3000", 10);
-      await startHttpTransport(server, port);
+      await startHttpTransport(createServer, port);
     } else {
       throw new Error(`Unknown transport: ${transportType}`);
     }

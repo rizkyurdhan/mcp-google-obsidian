@@ -4,25 +4,17 @@ import express from "express";
 import { logger } from "../utils/logger.js";
 import { generateAuthUrl, exchangeCode } from "../auth/oauth.js";
 
-export async function startHttpTransport(server: McpServer, port: number) {
+export async function startHttpTransport(createServer: () => McpServer, port: number) {
     const app = express();
 
-    // Map of active session ID to transport
-    const transports = new Map<string, SSEServerTransport>();
+    // Each SSE client gets its own McpServer instance (SDK allows only one transport per server)
+    const sessions = new Map<string, { transport: SSEServerTransport; server: McpServer }>();
 
     app.get("/sse", async (req, res) => {
         logger.info("New SSE connection request.");
 
         try {
-            // Close previous session — McpServer only supports one transport at a time
-            for (const [id, old] of transports) {
-                logger.info(`Closing old transport ${id}`);
-                await old.close().catch((e) => logger.error("Old transport close error:", e));
-                transports.delete(id);
-            }
-            logger.info("Closing server...");
-            await server.close().catch((e) => logger.error("Server close error:", e));
-            logger.info("Server closed.");
+            const server = createServer();
 
             // Intercept res.write to rewrite the SSE endpoint URL to be absolute
             const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -58,28 +50,24 @@ export async function startHttpTransport(server: McpServer, port: number) {
                 }
             }, 15000);
 
-            // Set onclose BEFORE server.connect(), so Protocol captures it and calls it properly
             transport.onclose = () => {
                 logger.info(`SSE connection closed.`);
-                // We'll clean up the map based on the active transport instance
-                for (const [id, t] of transports) {
-                    if (t === transport) {
-                        transports.delete(id);
+                for (const [id, s] of sessions) {
+                    if (s.transport === transport) {
+                        sessions.delete(id);
+                        server.close().catch((e) => logger.error("Server close error:", e));
                         logger.info(`Removed session ${id} from map`);
                     }
                 }
                 clearInterval(interval);
             };
 
-            logger.info("Connecting new transport...");
             await server.connect(transport);
-            logger.info("Transport connected!");
 
-            // Wait for the transport to initialize and generate a sessionId
             const sessionId = transport.sessionId;
             if (sessionId) {
-                transports.set(sessionId, transport);
-                logger.info(`SSE connection established for session: ${sessionId}`);
+                sessions.set(sessionId, { transport, server });
+                logger.info(`SSE session ${sessionId} established (${sessions.size} active)`);
             }
         } catch (err: any) {
             logger.error("Failed in GET /sse:", err);
@@ -97,14 +85,14 @@ export async function startHttpTransport(server: McpServer, port: number) {
             return;
         }
 
-        const transport = transports.get(sessionId);
-        if (!transport) {
+        const session = sessions.get(sessionId);
+        if (!session) {
             res.status(404).send(`No active session found for ID: ${sessionId}`);
             return;
         }
 
         try {
-            await transport.handlePostMessage(req, res);
+            await session.transport.handlePostMessage(req, res);
         } catch (err: any) {
             logger.error(`Error handling message for session ${sessionId}:`, err);
             if (!res.headersSent) {
