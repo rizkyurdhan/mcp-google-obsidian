@@ -11,7 +11,6 @@ services:
       - OBSIDIAN_REST_API_URL=https://obsidian:27124
       - OBSIDIAN_REST_API_KEY=replace_this_with_key_from_plugin
       - OBSIDIAN_VAULT_PATH=/vault # Kept as a fallback
-      - GOOGLE_REDIRECT_URI=http://srv1757576.tailf459bb.ts.net:3005/callback
     volumes:
       - /opt/docker/obsidian-vault/Bismillahirrohmanirrahim:/vault
       - ./tokens.json:/app/tokens.json
