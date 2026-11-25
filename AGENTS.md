@@ -41,3 +41,13 @@ The MCP server listens on container port `3000`, exposed locally as `3005`. Obsi
 - Preserve error handling around Google, Obsidian, filesystem, and token operations.
 - Do not edit generated `dist/` output by hand.
 - Do not modify deployment secrets or unrelated worktree changes.
+
+## Deployment lessons
+
+- Keep `OBSIDIAN_REST_API_KEY` in `.env`; never hardcode a placeholder or real key in Compose. Compose-level values override `env_file` values.
+- Keep `obsidian-config/`, `.env`, `tokens.json`, `node_modules/`, `dist/`, and `.git/` out of Docker build context. The Obsidian config is runtime state and may contain protected files; credentials must not enter image layers.
+- The MCP container mounts `/opt/docker/obsidian-vault/Bismillahirrohmanirrahim` as `/vault`. The Obsidian container mounts the parent `/opt/docker/obsidian-vault`; confirm the application opens the nested folder as the vault.
+- The bridge sync status tracks Google Workspace note imports/exports. It is not Obsidian Sync. A test note created through MCP has been verified to reach iOS through native Sync, and the desktop GUI renders. The test note remains in the vault. The REST adapter is selected only when the Local REST API endpoint accepts the configured key; otherwise the server falls back to filesystem access.
+- Tailscale HTTPS `8443` proxies the GUI via host `3001`; TCP `3002` forwards MCP via host `3005`. Compose publishes those host ports on all interfaces: Tailscale Serve alone does not restrict direct access.
+- The Obsidian container uses UID/GID `1001:1001` and `1gb` shared memory. Its persistent Wayland launcher is `obsidian-config/.config/labwc/autostart`. Selkies HTTP 200 is not proof of a working live stream; inspect the app/renderer and shared memory if blank. See `MCP-Docker-Setup-Guide.md` for runtime and security caveats.
+- Verify deployment with `docker compose up -d --build`, then inspect sanitized logs and test a read-only vault listing. Never print API keys, OAuth tokens, or note content.

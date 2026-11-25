@@ -1,0 +1,14 @@
+# Runtime-mounted Obsidian app state (never needed in the image)
+obsidian-config/
+
+# Dependencies and build output (installed/built inside the image)
+node_modules/
+dist/
+
+# Secrets and credentials
+.env
+tokens.json
+
+# VCS and backups
+.git/
+docker-compose.yml.pre-hermes-*

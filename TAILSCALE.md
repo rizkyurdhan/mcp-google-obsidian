@@ -1,49 +1,31 @@
-# Exposing the MCP Server via Tailscale
+# Tailscale endpoints
 
-This project uses Server-Sent Events (SSE) via HTTP to allow remote connections.
+The Tailscale Serve routes below are tailnet-only. Compose also publishes host ports 3001 and 3005 on all interfaces; Tailscale Serve does not restrict direct access to those ports. Use firewall rules as appropriate. Check the live routes with `tailscale serve status`.
 
-Since you are using Tailscale, you can securely expose the HTTP port to other devices on your Tailnet (like a laptop running Obsidian) without exposing it to the public internet.
+## Obsidian web GUI
 
-## 1. Start the Docker Container
-Run the server using docker-compose:
+Open the GUI at:
+
+`https://srv1757576.tailf459bb.ts.net:8443`
+
+Route: Tailscale HTTPS `:8443` → `http://localhost:3001` → Obsidian container port `3000` (Selkies web desktop in the current linuxserver image). The GUI opens the canonical vault at `/vault/Bismillahirrohmanirrahim`. This desktop session must be signed into the same Obsidian account and have Sync enabled for changes to reach iOS.
+
+An HTTP 200 from the GUI port only proves the Selkies web page loads — not that the live desktop stream works. The stream also needs the websocket connection and a running Obsidian process (see `MCP-Docker-Setup-Guide.md` troubleshooting).
+
+## MCP HTTP/SSE
+
+- Tailscale TCP `:3002` → `localhost:3005` → MCP container port `3000`.
+- SSE client URL: `http://srv1757576.tailf459bb.ts.net:3002/sse`.
+
+The MCP container mounts `/opt/docker/obsidian-vault/Bismillahirrohmanirrahim` as `/vault`, the same vault opened by the GUI. Google Workspace bridge sync status is separate from native Obsidian Sync. A test note created through MCP has been verified to reach iOS via native Sync, and the desktop GUI renders. The test note remains in the vault.
+
+## Verify routes
+
+On the VPS, run:
+
 ```bash
-docker compose up -d
+sudo tailscale serve status
+curl -I http://127.0.0.1:3001/
 ```
 
-This starts the server and maps port 3000 on your host to port 3000 in the container.
-
-## 2. Expose the Port with Tailscale Serve
-On the machine running Docker, run:
-
-```bash
-sudo tailscale serve --bg 3000
-```
-
-This tells Tailscale to route traffic from your Tailnet to local port 3000 in the background.
-
-## 3. Connect from Remote Client
-From your remote client (e.g., Cursor or Obsidian running on another device in your Tailnet), you will connect to the server using the machine's Tailscale domain name or Tailscale IP.
-
-Example URL:
-`http://your-server-name.tailnet-name.ts.net:3000/sse`
-
-If connecting via the official MCP client configuration, you would use:
-```json
-{
-  "mcpServers": {
-    "mcp-google-obsidian": {
-      "command": "node",
-      "args": ["path/to/remote/bridge/script.js"] 
-      // Note: If the client only supports stdio (like Cursor natively right now), 
-      // you might need a small proxy script. But if the client supports SSE URLs natively, 
-      // just plug in the URL above.
-    }
-  }
-}
-```
-
-## Stopping Tailscale Serve
-If you need to stop serving the port over Tailscale, run:
-```bash
-sudo tailscale serve --bg off
-```
+The GUI route should show `:8443` proxying to `localhost:3001`. The MCP route should show `:3002` forwarding to `localhost:3005`. Do not use the bare tailnet hostname for the GUI; it may route to a different service.

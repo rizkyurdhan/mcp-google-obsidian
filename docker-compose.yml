@@ -9,7 +9,6 @@ services:
       - MCP_TRANSPORT=http
       - MCP_HTTP_PORT=3000
       - OBSIDIAN_REST_API_URL=https://obsidian:27124
-      - OBSIDIAN_REST_API_KEY=replace_this_with_key_from_plugin
       - OBSIDIAN_VAULT_PATH=/vault # Kept as a fallback
     volumes:
       - /opt/docker/obsidian-vault/Bismillahirrohmanirrahim:/vault
@@ -21,11 +20,12 @@ services:
   obsidian:
     image: lscr.io/linuxserver/obsidian:latest
     container_name: obsidian
+    shm_size: 1gb
     security_opt:
       - seccomp:unconfined # Required for Chrome/Electron inside container
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1001
+      - PGID=1001
       - TZ=Etc/UTC
       - DOCKER_MODS=linuxserver/mods:universal-kasmvnc-http
       - CUSTOM_RES_W=1280
